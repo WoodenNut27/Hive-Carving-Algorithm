@@ -12,5 +12,14 @@
     }
   },
   "license": "NYSL",
-  "author": "WoodenNut (https://www.woodennut.com/)"
+  "author": "WoodenNut (https://www.woodennut.com/)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/WoodenNut27/Hive-Carving-Algorithm.git",
+    "directory": "JavaScript"
+  },
+  "homepage": "https://github.com/WoodenNut27/Hive-Carving-Algorithm#readme",
+  "bugs": {
+    "url": "https://github.com/WoodenNut27/Hive-Carving-Algorithm/issues"
+  }
 }
