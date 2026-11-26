@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"hivecarving"
+	hivecarving "github.com/WoodenNut27/Hive-Carving-Algorithm/Go"
 )
 
 func main() {

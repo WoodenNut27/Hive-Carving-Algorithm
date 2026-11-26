@@ -60,6 +60,8 @@ maze.cells                     # マップ全体（インデックスは y * wid
 
 ほかに、`seed`（使用したシード）、`parallel`（切り詰め後の並列数）、`rounds`（ステップ数）、`finished` も参照できます。
 
+Go 版は `go get github.com/WoodenNut27/Hive-Carving-Algorithm/Go` で取得し、`import hivecarving "github.com/WoodenNut27/Hive-Carving-Algorithm/Go"` で取り込めます。
+
 ### サンプル
 
 どの言語にも、迷路をテキストで出力するサンプルがあります。リポジトリ直下で実行します。
