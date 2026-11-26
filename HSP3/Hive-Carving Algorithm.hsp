@@ -1,0 +1,192 @@
+//==========================================================//
+//					ハイヴ・カービング法					//
+//==========================================================//
+
+//	Name	: ハイヴ・カービング法
+//			  Hive-Carving Algorithm
+//	Date	: 2025/05/22
+//	version	: 1.0.0
+//	license	: NYSL
+//	author	: 木製ナット(WoodenNut)
+//	URL		: https://www.woodennut.com/
+
+//	Copyright (c) 2025 WoodenNut
+
+
+
+//------------------------------------------------------
+//イニシャライズ
+//------------------------------------------------------
+*initial
+	;randomize
+
+	//変えていいやつら
+	map_size_x = 41		//マップサイズX (奇数)
+	map_size_y = 41		//マップサイズY (奇数)
+	parallel_point = 5	//穴掘りを並列で行う数
+
+	//変数宣言(迷路生成に必要なやつら)
+	dim map_data , map_size_x , map_size_y			//マップデータ
+	dim parallel_dig_pos_x , parallel_point			//並列穴掘りの現在位置X
+	dim parallel_dig_pos_y , parallel_point			//並列穴掘りの現在位置Y
+	sdim parallel_direction_stack , parallel_point	//並列穴掘りの掘った方向の記憶
+	dim direct_connection_list , parallel_point , parallel_point	//直接繋がった他の穴掘りプロセス
+
+	sdim noteget_tmp , 64
+
+	dig_cnt = 0											//穴を掘った回数(全ての合計)
+	dig_complete = (map_size_x / 2) * (map_size_y / 2)	//穴掘りを完了させる時の数(dig_cntがこれに到達したら、マップの全領域の穴掘りが完了する)
+
+
+
+//------------------------------------------------------
+//メイン処理
+//------------------------------------------------------
+*main
+	//穴掘りスタート位置を決定
+	repeat parallel_point
+		cnt2 = cnt
+
+		//スタート位置の被り発生対策(並列数が多すぎると処理が終わらないので改善必要)
+		repeat
+			dig_pos_x = rnd(map_size_x / 2) * 2 + 1
+			dig_pos_y = rnd(map_size_y / 2) * 2 + 1
+			if map_data(dig_pos_x , dig_pos_y) == 0 : break
+
+			//スタート位置が決まらない場合、強制的に並列数を減らす
+			if cnt > map_size_x * map_size_y * 2{
+				parallel_point = cnt2
+				break
+			}
+		loop
+
+		//並列数が減らされた場合の強制終了
+		if cnt >= parallel_point : break
+
+		//スタート位置を掘る
+		parallel_dig_pos_x(cnt) = dig_pos_x
+		parallel_dig_pos_y(cnt) = dig_pos_y
+		map_data(dig_pos_x , dig_pos_y) = cnt + 1
+		dig_cnt ++
+	loop
+
+	//メイン処理
+	repeat
+		title "メインループカウンタ=" + cnt
+
+		//並列数の数だけ穴掘り法を実行
+		repeat parallel_point
+			notesel parallel_direction_stack(cnt)
+
+			cnt2 = cnt
+
+			//穴掘りの方向を指定
+			dig_select_direction = rnd(4)
+
+			repeat 4
+				//0=左・1=上・2=右・3=下
+				dig_direction_x = (dig_select_direction - 1) * (dig_select_direction \ 2 ^ 1)
+				dig_direction_y = (dig_select_direction - 2) * (dig_select_direction \ 2)
+				dig_pos_x = parallel_dig_pos_x(cnt2) + dig_direction_x * 2
+				dig_pos_y = parallel_dig_pos_y(cnt2) + dig_direction_y * 2
+
+				//マップ範囲内だったら
+				if dig_pos_x > 0 & dig_pos_y > 0 & dig_pos_x < map_size_x & dig_pos_y < map_size_y{
+					dig_target_map_data = map_data(dig_pos_x , dig_pos_y)
+
+					if dig_target_map_data == 0{
+						//マップデータが0(壁)だったら穴掘り
+						break
+					}else:if dig_target_map_data != cnt2 + 1 & direct_connection_list(cnt2 , dig_target_map_data - 1) == 0{
+						//他の穴掘りプロセスに未接続だったら接続
+						map_data(parallel_dig_pos_x(cnt2) + dig_direction_x , parallel_dig_pos_y(cnt2) + dig_direction_y) = cnt2 + 1
+						direct_connection_list(cnt2 , dig_target_map_data - 1) = 1
+						direct_connection_list(dig_target_map_data - 1 , cnt2) = 1
+					}
+				}
+
+				//穴掘りの方向を時計周りに回転
+				dig_select_direction = (dig_select_direction + 1) \ 4
+
+				//全方向掘れなかったら方向を無効化
+				if cnt == 3 : dig_select_direction = -1
+			loop
+
+			if dig_select_direction >= 0{
+				//穴掘りの方向が有効なものだったら穴掘りを実行
+				map_data(parallel_dig_pos_x(cnt) + dig_direction_x , parallel_dig_pos_y(cnt) + dig_direction_y) = cnt + 1
+				map_data(dig_pos_x , dig_pos_y) = cnt + 1
+
+				//掘った方向をスタックに記憶
+				noteadd str(dig_select_direction)
+
+				//掘った回数をカウント(穴掘り完了処理用)
+				dig_cnt ++
+			}else{
+				if notemax > 0{
+					//掘った方向のスタックがあったら、取り出して掘る位置を戻る
+					noteget noteget_tmp , notemax - 1
+					notedel notemax - 1
+
+					dig_select_direction = int(noteget_tmp)
+					dig_direction_x = (dig_select_direction - 1) * (dig_select_direction \ 2 ^ 1)
+					dig_direction_y = (dig_select_direction - 2) * (dig_select_direction \ 2)
+					dig_pos_x = parallel_dig_pos_x(cnt) - dig_direction_x * 2
+					dig_pos_y = parallel_dig_pos_y(cnt) - dig_direction_y * 2
+				}else{
+					//スタックがない場合、その場にとどまる
+					dig_pos_x = parallel_dig_pos_x(cnt)
+					dig_pos_y = parallel_dig_pos_y(cnt)
+				}
+			}
+
+			parallel_dig_pos_x(cnt) = dig_pos_x
+			parallel_dig_pos_y(cnt) = dig_pos_y
+
+			noteunsel
+		loop
+
+		gosub*draw
+		if dig_cnt >= dig_complete : break
+	loop
+
+
+
+//------------------------------------------------------
+//処理終了
+//------------------------------------------------------
+*exit
+	title "迷路生成完了"
+stop
+
+
+
+//------------------------------------------------------
+//画面描画(サブルーチン)
+//------------------------------------------------------
+*draw
+	tile_size = 10
+
+	redraw 0
+	rgbcolor $FFFFFF
+	boxf
+
+	repeat map_size_x
+		cnt2 = cnt
+
+		repeat map_size_y
+			if map_data(cnt2 , cnt) == 0{
+				rgbcolor 0
+			}else{
+				//プロセスごとに色を変える
+				hsvcolor map_data(cnt2 , cnt) * 191 / parallel_point , 255 , 255
+			}
+
+			boxf cnt2 * tile_size , cnt * tile_size , cnt2 * tile_size + tile_size , cnt * tile_size + tile_size
+		loop
+	loop
+
+	redraw 1
+	await 10
+
+return

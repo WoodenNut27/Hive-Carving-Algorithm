@@ -1,0 +1,20 @@
+# C#
+bin/
+obj/
+
+# Python
+__pycache__/
+
+# Rust
+Rust/target/
+Rust/Cargo.lock
+
+# C++ / Java のビルド成果物 (README のサンプル手順で作られるものを含む)
+*.exe
+*.obj
+*.class
+/example
+/out/
+
+# HSP3
+*.ax

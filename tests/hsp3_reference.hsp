@@ -1,0 +1,184 @@
+//==========================================================//
+//		ハイヴ・カービング法  検証用リファレンス (hsp3cl)		//
+//==========================================================//
+//
+//	HSP3/Hive-Carving Algorithm.hsp のメイン処理を「そのまま」使い、
+//	次の 2 点だけを各言語版と同じ仕様に差し替えたもの。
+//	  1. rnd() → 全言語共通の擬似乱数 Mulberry32 (m32_rnd)
+//	  2. スタート位置の決定 → 部屋の一覧からの重複なし抽選 (Fisher-Yates)
+//	出力 (マップデータを空白区切り) が各言語版の "ids" 出力と一致すれば、
+//	移植版がオリジナルと同じ動きをしていることになる。
+//
+//	使い方: hsp3cl hsp3_reference.ax <width> <height> <parallel> <seed>
+
+#runtime "hsp3cl"
+
+//------------------------------------------------------
+//Mulberry32 (32bit 符号付き整数で符号なし演算を再現)
+//------------------------------------------------------
+#module m32
+#deffunc m32_seed int s
+	st = s
+	return
+
+#defcfunc m32_next
+	st += $6D2B79F5
+	t = (st ^ ((st >> 15) & $1FFFF)) * (st | 1)
+	t = (t + ((t ^ ((t >> 7) & $1FFFFFF)) * (t | 61))) ^ t
+	return t ^ ((t >> 14) & $3FFFF)
+
+//rnd(n) 相当 : 符号なし 32bit 値 mod n
+#defcfunc m32_rnd int n
+	v = m32_next()
+	if v >= 0 : return v \ n
+	return (((($40000000 \ n) * 2) \ n) + ((v & $7FFFFFFF) \ n)) \ n
+#global
+
+
+
+//------------------------------------------------------
+//イニシャライズ
+//------------------------------------------------------
+*initial
+	sdim cmdline_args , 64 , 8
+	cmdline = dir_cmdline
+	split cmdline , " " , cmdline_args
+
+	map_size_x = int(cmdline_args(0))	//マップサイズX (奇数)
+	map_size_y = int(cmdline_args(1))	//マップサイズY (奇数)
+	parallel_point = int(cmdline_args(2))	//穴掘りを並列で行う数
+	seed_value = double(cmdline_args(3))		//2^31 以上のシードは符号付き 32bit に読み替える
+	if seed_value >= 2147483648.0 : seed_value -= 4294967296.0
+	m32_seed int(seed_value)
+
+	dig_cnt = 0											//穴を掘った回数(全ての合計)
+	dig_complete = (map_size_x / 2) * (map_size_y / 2)	//穴掘りを完了させる時の数
+
+	//[差し替え] 並列数は部屋の数まで
+	if parallel_point > dig_complete : parallel_point = dig_complete
+
+	//変数宣言(迷路生成に必要なやつら)
+	dim map_data , map_size_x , map_size_y			//マップデータ
+	dim parallel_dig_pos_x , parallel_point			//並列穴掘りの現在位置X
+	dim parallel_dig_pos_y , parallel_point			//並列穴掘りの現在位置Y
+	sdim parallel_direction_stack , parallel_point	//並列穴掘りの掘った方向の記憶
+	dim direct_connection_list , parallel_point , parallel_point	//直接繋がった他の穴掘りプロセス
+
+	sdim noteget_tmp , 64
+
+
+
+//------------------------------------------------------
+//メイン処理
+//------------------------------------------------------
+*main
+	//[差し替え] 穴掘りスタート位置を、部屋の一覧から重複なしで抽選 (Fisher-Yates)
+	room_w = map_size_x / 2
+	dim room_pool , dig_complete
+	repeat dig_complete : room_pool(cnt) = cnt : loop
+
+	repeat parallel_point
+		j = cnt + m32_rnd(dig_complete - cnt)
+		room = room_pool(j) : room_pool(j) = room_pool(cnt) : room_pool(cnt) = room
+
+		//スタート位置を掘る
+		parallel_dig_pos_x(cnt) = (room \ room_w) * 2 + 1
+		parallel_dig_pos_y(cnt) = (room / room_w) * 2 + 1
+		map_data(parallel_dig_pos_x(cnt) , parallel_dig_pos_y(cnt)) = cnt + 1
+		dig_cnt ++
+	loop
+
+	//メイン処理 (ここから下はオリジナルと同一。rnd → m32_rnd のみ変更)
+	repeat
+		main_loop_count = cnt + 1
+
+		//並列数の数だけ穴掘り法を実行
+		repeat parallel_point
+			notesel parallel_direction_stack(cnt)
+
+			cnt2 = cnt
+
+			//穴掘りの方向を指定
+			dig_select_direction = m32_rnd(4)
+
+			repeat 4
+				//0=左・1=上・2=右・3=下
+				dig_direction_x = (dig_select_direction - 1) * (dig_select_direction \ 2 ^ 1)
+				dig_direction_y = (dig_select_direction - 2) * (dig_select_direction \ 2)
+				dig_pos_x = parallel_dig_pos_x(cnt2) + dig_direction_x * 2
+				dig_pos_y = parallel_dig_pos_y(cnt2) + dig_direction_y * 2
+
+				//マップ範囲内だったら
+				if dig_pos_x > 0 & dig_pos_y > 0 & dig_pos_x < map_size_x & dig_pos_y < map_size_y{
+					dig_target_map_data = map_data(dig_pos_x , dig_pos_y)
+
+					if dig_target_map_data == 0{
+						//マップデータが0(壁)だったら穴掘り
+						break
+					}else:if dig_target_map_data != cnt2 + 1 & direct_connection_list(cnt2 , dig_target_map_data - 1) == 0{
+						//他の穴掘りプロセスに未接続だったら接続
+						map_data(parallel_dig_pos_x(cnt2) + dig_direction_x , parallel_dig_pos_y(cnt2) + dig_direction_y) = cnt2 + 1
+						direct_connection_list(cnt2 , dig_target_map_data - 1) = 1
+						direct_connection_list(dig_target_map_data - 1 , cnt2) = 1
+					}
+				}
+
+				//穴掘りの方向を時計周りに回転
+				dig_select_direction = (dig_select_direction + 1) \ 4
+
+				//全方向掘れなかったら方向を無効化
+				if cnt == 3 : dig_select_direction = -1
+			loop
+
+			if dig_select_direction >= 0{
+				//穴掘りの方向が有効なものだったら穴掘りを実行
+				map_data(parallel_dig_pos_x(cnt) + dig_direction_x , parallel_dig_pos_y(cnt) + dig_direction_y) = cnt + 1
+				map_data(dig_pos_x , dig_pos_y) = cnt + 1
+
+				//掘った方向をスタックに記憶
+				noteadd str(dig_select_direction)
+
+				//掘った回数をカウント(穴掘り完了処理用)
+				dig_cnt ++
+			}else{
+				if notemax > 0{
+					//掘った方向のスタックがあったら、取り出して掘る位置を戻る
+					noteget noteget_tmp , notemax - 1
+					notedel notemax - 1
+
+					dig_select_direction = int(noteget_tmp)
+					dig_direction_x = (dig_select_direction - 1) * (dig_select_direction \ 2 ^ 1)
+					dig_direction_y = (dig_select_direction - 2) * (dig_select_direction \ 2)
+					dig_pos_x = parallel_dig_pos_x(cnt) - dig_direction_x * 2
+					dig_pos_y = parallel_dig_pos_y(cnt) - dig_direction_y * 2
+				}else{
+					//スタックがない場合、その場にとどまる
+					dig_pos_x = parallel_dig_pos_x(cnt)
+					dig_pos_y = parallel_dig_pos_y(cnt)
+				}
+			}
+
+			parallel_dig_pos_x(cnt) = dig_pos_x
+			parallel_dig_pos_y(cnt) = dig_pos_y
+
+			noteunsel
+		loop
+
+		if dig_cnt >= dig_complete : break
+	loop
+
+
+
+//------------------------------------------------------
+//結果出力 (マップデータを空白区切りで 1 行ずつ)
+//------------------------------------------------------
+	repeat map_size_y
+		out_y = cnt
+		out_line = ""
+		repeat map_size_x
+			if cnt > 0 : out_line += " "
+			out_line += str(map_data(cnt , out_y))
+		loop
+		mes out_line
+	loop
+	end

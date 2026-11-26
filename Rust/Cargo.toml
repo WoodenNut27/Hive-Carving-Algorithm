@@ -1,0 +1,9 @@
+[package]
+name = "hive_carving"
+version = "1.0.0"
+edition = "2021"
+description = "Hive-Carving Algorithm: parallel recursive-backtracker maze generator that intentionally creates loops"
+license-file = "../LICENSE"
+authors = ["WoodenNut (https://www.woodennut.com/)"]
+
+[dependencies]

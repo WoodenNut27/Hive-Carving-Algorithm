@@ -1,0 +1,16 @@
+{
+  "name": "hive-carving",
+  "version": "1.0.0",
+  "description": "Hive-Carving Algorithm: parallel recursive-backtracker maze generator that intentionally creates loops",
+  "type": "module",
+  "main": "hive-carving.js",
+  "types": "hive-carving.d.ts",
+  "exports": {
+    ".": {
+      "types": "./hive-carving.d.ts",
+      "default": "./hive-carving.js"
+    }
+  },
+  "license": "NYSL",
+  "author": "WoodenNut (https://www.woodennut.com/)"
+}
